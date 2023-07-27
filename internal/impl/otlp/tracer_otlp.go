@@ -18,27 +18,37 @@ import (
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
-func init() {
-	spec := service.NewConfigSpec().
-		Summary("Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).").
-		Field(service.NewObjectListField("http",
-			service.NewURLField("url").
-				Description("The URL of a collector to send tracing events to.").
-				Default("localhost:4318"),
-		).Description("A list of http collectors.")).
-		Field(service.NewObjectListField("grpc",
-			service.NewURLField("url").
-				Description("The URL of a collector to send tracing events to.").
-				Default("localhost:4317"),
-		).Description("A list of grpc collectors.")).
-		Field(service.NewStringMapField("tags").
-			Description("A map of tags to add to all tracing spans.").
-			Default(map[string]string{}).
-			Advanced())
+const (
+	svcNameKey = semconv.ServiceNameKey
+	svcVerKey  = semconv.ServiceVersionKey
+)
 
+var cliVersion = cli.Version
+var svcVersion = svcVerKey.String(cliVersion)
+var configSpec = service.NewConfigSpec().
+	Summary("Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).").
+	Field(service.NewObjectListField("http",
+		service.NewURLField("url").
+			Description("The URL of a collector to send tracing events to.").
+			Default("localhost:4318"),
+	).Description("A list of http collectors.")).
+	Field(service.NewObjectListField("grpc",
+		service.NewURLField("url").
+			Description("The URL of a collector to send tracing events to.").
+			Default("localhost:4317"),
+	).Description("A list of grpc collectors.")).
+	Field(service.NewStringMapField("tags").
+		Description("A map of tags to add to all tracing spans.").
+		Default(map[string]string{
+			string(svcNameKey): "benthos",
+			string(svcVerKey):  cliVersion,
+		}).
+		Advanced())
+
+func init() {
 	err := service.RegisterOtelTracerProvider(
 		"open_telemetry_collector",
-		spec,
+		configSpec,
 		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
 			c, err := newOtlpConfig(conf)
 			if err != nil {
@@ -122,13 +132,13 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 		attrs = append(attrs, attribute.String(k, v))
 	}
 
-	if _, ok := config.tags[string(semconv.ServiceNameKey)]; !ok {
-		attrs = append(attrs, semconv.ServiceNameKey.String("benthos"))
+	if _, ok := config.tags[string(svcNameKey)]; !ok {
+		attrs = append(attrs, svcNameKey.String("benthos"))
 
 		// Only set the default service version tag if the user doesn't provide
-		// a custom service name tag.
-		if _, ok := config.tags[string(semconv.ServiceVersionKey)]; !ok {
-			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+		// a custom service version tag.
+		if _, ok := config.tags[string(svcVerKey)]; !ok {
+			attrs = append(attrs, svcVersion)
 		}
 	}
 
