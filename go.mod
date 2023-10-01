@@ -27,6 +27,7 @@ require (
 	github.com/aws/aws-sdk-go v1.45.12
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.24.0
+	github.com/bits-and-blooms/bloom/v3 v3.5.0
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/bwmarrin/snowflake v0.3.0
@@ -93,7 +94,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/segmentio/ksuid v1.0.4
 	github.com/segmentio/parquet-go v0.0.0-20220830163417-b03c0471ebb0
-	github.com/sijms/go-ora/v2 v2.7.17
+	github.com/seiflotfy/cuckoofilter v0.0.0-20220411075957-e3b120b3f5fb
+	github.com/sijms/go-ora/v2 v2.7.14
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smira/go-statsd v1.3.2
 	github.com/snowflakedb/gosnowflake v1.6.24
@@ -173,7 +175,7 @@ require (
 	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.4.0 // indirect
+	github.com/bits-and-blooms/bitset v1.8.0 // indirect
 	github.com/bufbuild/protocompile v0.6.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.0 // indirect
@@ -182,6 +184,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/danieljoos/wincred v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-metro v0.0.0-20211217172704-adc40b04c140 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/docker/cli v20.10.17+incompatible // indirect
