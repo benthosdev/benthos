@@ -10,12 +10,12 @@ import (
 	lruv2 "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/middleware"
 )
 
 const (
 	lruCacheFieldCapLabel        = "cap"
 	lruCacheFieldCapDefaultValue = 1000
-	lruCacheFieldInitValuesLabel = "init_values"
 
 	// specific to algorithm
 	lruCacheFieldAlgorithmLabel         = "algorithm"
@@ -38,12 +38,16 @@ const (
 func lruCacheConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Stable().
-		Summary(`Stores key/value pairs in a lru in-memory cache. This cache is therefore reset every time the service restarts.`).
-		Description(`This provides the lru package which implements a fixed-size thread safe LRU cache.
+		Summary(`Stores key/value pairs in a lru in-memory cache. This cache is therefore reset every time the service restarts.`)
+
+	spec = middleware.ApplyCacheShardedFields(spec)
+	spec = middleware.ApplyCacheInitValuesFields(spec)
+
+	spec.Description(`This provides the lru package which implements a fixed-size thread safe LRU cache.
 
 It uses the package ` + "[`lru`](https://github.com/hashicorp/golang-lru/v2)" + `
 
-The field ` + lruCacheFieldInitValuesLabel + ` can be used to pre-populate the memory cache with any number of key/value pairs:
+The field ` + "`init_values`" + ` can be used to pre-populate the memory cache with any number of key/value pairs:
 
 ` + "```yaml" + `
 cache_resources:
@@ -58,14 +62,6 @@ These values can be overridden during execution.`).
 		Field(service.NewIntField(lruCacheFieldCapLabel).
 			Description("The cache maximum capacity (number of entries)").
 			Default(lruCacheFieldCapDefaultValue)).
-		Field(service.NewStringMapField(lruCacheFieldInitValuesLabel).
-			Description("A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.").
-			Default(map[string]string{}).
-			Example(map[string]string{
-				"Nickelback":       "1995",
-				"Spice Girls":      "1994",
-				"The Human League": "1977",
-			})).
 		Field(service.NewStringAnnotatedEnumField(lruCacheFieldAlgorithmLabel, map[string]string{
 			lruCacheFieldAlgorithmValueStandard: "is a simple LRU cache. It is based on the LRU implementation in groupcache",
 			lruCacheFieldAlgorithmValueARC:      "is an adaptive replacement cache. It tracks recent evictions as well as recent usage in both the frequent and recent caches. Its computational overhead is comparable to " + lruCacheFieldAlgorithmValue2Q + ", but the memory overhead is linear with the size of the cache. ARC has been patented by IBM.",
@@ -93,27 +89,26 @@ These values can be overridden during execution.`).
 }
 
 func init() {
-	err := service.RegisterCache(
-		"lru", lruCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
-			f, err := lruMemCacheFromConfig(conf)
-			if err != nil {
-				return nil, err
-			}
-			return f, nil
-		})
+	ctx := context.Background()
+
+	ctor := middleware.WrapCacheConstructorWithShards(ctx, lruMemCtxCacheConstructor)
+
+	ctor = middleware.WrapCacheInitValues(ctx, ctor)
+
+	err := service.RegisterCache("lru", lruCacheConfig(), ctor)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func lruMemCacheFromConfig(conf *service.ParsedConfig) (*lruCacheAdapter, error) {
-	capacity, err := conf.FieldInt(lruCacheFieldCapLabel)
-	if err != nil {
-		return nil, err
-	}
+func lruMemCtxCacheConstructor(_ context.Context,
+	conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 
-	initValues, err := conf.FieldStringMap(lruCacheFieldInitValuesLabel)
+	return lruMemCacheFromConfig(conf, mgr)
+}
+
+func lruMemCacheFromConfig(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
+	capacity, err := conf.FieldInt(lruCacheFieldCapLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +140,7 @@ func lruMemCacheFromConfig(conf *service.ParsedConfig) (*lruCacheAdapter, error)
 		return nil, err
 	}
 
-	return lruMemCache(capacity, algorithm, initValues, recentRatioPtr, ghostRatioPtr, optimistic)
+	return lruMemCache(capacity, algorithm, recentRatioPtr, ghostRatioPtr, optimistic)
 }
 
 //------------------------------------------------------------------------------
@@ -156,7 +151,6 @@ var (
 
 func lruMemCache(capacity int,
 	algorithm string,
-	initValues map[string]string,
 	recentRatio, ghostRatio *float64,
 	optimistic bool) (ca *lruCacheAdapter, err error) {
 	if capacity <= 0 {
@@ -196,10 +190,6 @@ func lruMemCache(capacity int,
 	default:
 		return nil, fmt.Errorf("algorithm %q not supported. the supported values are %q, %q and %q", algorithm,
 			lruCacheFieldAlgorithmValueStandard, lruCacheFieldAlgorithmValueARC, lruCacheFieldAlgorithmValue2Q)
-	}
-
-	for k, v := range initValues {
-		inner.Add(k, []byte(v))
 	}
 
 	return &lruCacheAdapter{

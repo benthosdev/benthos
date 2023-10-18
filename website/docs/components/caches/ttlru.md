@@ -27,9 +27,9 @@ Stores key/value pairs in a ttlru in-memory cache. This cache is therefore reset
 # Common config fields, showing default values
 label: ""
 ttlru:
+  init_values: {}
   cap: 1024
   default_ttl: 5m0s
-  init_values: {}
 ```
 
 </TabItem>
@@ -39,10 +39,11 @@ ttlru:
 # All config fields, showing default values
 label: ""
 ttlru:
+  shards: 1
+  init_values: {}
   cap: 1024
   default_ttl: 5m0s
   ttl: "" # No default (optional)
-  init_values: {}
   optimistic: false
 ```
 
@@ -55,7 +56,7 @@ This TTL is reset on both modification and access of the value. As a result, if 
 
 It uses the package [`expirable`](https://github.com/hashicorp/golang-lru/v2/expirable)
 
-The field init_values can be used to pre-populate the memory cache with any number of key/value pairs:
+The field `init_values` can be used to pre-populate the memory cache with any number of key/value pairs:
 
 ```yaml
 cache_resources:
@@ -70,6 +71,31 @@ cache_resources:
 These values can be overridden during execution.
 
 ## Fields
+
+### `shards`
+
+A number of logical shards to spread keys across, increasing the shards can have a performance benefit when processing a large number of keys.
+
+
+Type: `int`  
+Default: `1`  
+
+### `init_values`
+
+A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
+
+
+Type: `object`  
+Default: `{}`  
+
+```yml
+# Examples
+
+init_values:
+  Nickelback: "1995"
+  Spice Girls: "1994"
+  The Human League: "1977"
+```
 
 ### `cap`
 
@@ -94,23 +120,6 @@ Deprecated. Please use `default_ttl` field
 
 
 Type: `string`  
-
-### `init_values`
-
-A table of key/value pairs that should be present in the cache on initialization. This can be used to create static lookup tables.
-
-
-Type: `object`  
-Default: `{}`  
-
-```yml
-# Examples
-
-init_values:
-  Nickelback: "1995"
-  Spice Girls: "1994"
-  The Human League: "1977"
-```
 
 ### `optimistic`
 
