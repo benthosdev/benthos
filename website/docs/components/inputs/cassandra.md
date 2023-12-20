@@ -57,6 +57,12 @@ input:
       initial_interval: "" # No default (optional)
       max_interval: "" # No default (optional)
     timeout: 600ms
+    connect_timeout: 600ms
+    use_token_aware_host_policy: false # No default (optional)
+    shuffle_replicas: false # No default (optional)
+    use_compressor: false # No default (optional)
+    default_idempotence: false # No default (optional)
+    keyspace: "" # No default (optional)
 ```
 
 </TabItem>
@@ -181,7 +187,7 @@ Type: `string`
 
 ### `timeout`
 
-Sorry! This field is missing documentation.
+cassandra query timeout
 
 
 Type: `string`  
@@ -192,5 +198,60 @@ Default: `"600ms"`
 
 timeout: 600ms
 ```
+
+### `connect_timeout`
+
+cassandra connect timeout.
+
+
+Type: `string`  
+Default: `"600ms"`  
+Requires version 4.XX.X or newer  
+
+```yml
+# Examples
+
+connect_timeout: 600ms
+```
+
+### `use_token_aware_host_policy`
+
+If enabled the driver will use a token aware host selection policy.
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `shuffle_replicas`
+
+If `use_token_aware_host_policy` is enabled the driver will shuffle replicas before pick one.
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `use_compressor`
+
+If true, will use snap compressor
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `default_idempotence`
+
+If true, enable the defaut idempotence. non-idempotence queries are not retried
+
+
+Type: `bool`  
+Requires version 4.XX.X or newer  
+
+### `keyspace`
+
+initial keyspace.
+
+
+Type: `string`  
+Requires version 4.XX.X or newer  
 
 

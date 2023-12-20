@@ -125,7 +125,13 @@ output:
 				docs.FieldString("max_interval", "The maximum period to wait between retry attempts."),
 				docs.FieldString("max_elapsed_time", "").Deprecated(),
 			).Advanced(),
-			docs.FieldString("timeout", "The client connection timeout.").AtVersion("3.63.0"),
+			docs.FieldString("timeout", "The client query timeout.").AtVersion("3.63.0"),
+			docs.FieldString("connect_timeout", "The client connection timeout.").Advanced().Optional().AtVersion("4.XX.X"),
+			docs.FieldBool("use_token_aware_host_policy", "if true, enable token aware host policy").Advanced().Optional().AtVersion("4.XX.X"),
+			docs.FieldBool("shuffle_replicas", "combining with `use_token_aware_host_policy`, will force shuffle replicas when pick the next host").Advanced().Optional().AtVersion("4.XX.X"),
+			docs.FieldBool("use_compressor", "if true, will use a snap compressor").Advanced().Optional().AtVersion("4.XX.X"),
+			docs.FieldBool("default_idempotence", "set queries as default idempotent. non idempotent queries are not retried").Advanced().Optional().AtVersion("4.XX.X"),
+			docs.FieldString("keyspace", "Initial keyspace.").Advanced().Optional().AtVersion("4.XX.X"),
 		).WithChildren(
 			docs.FieldInt("max_in_flight", "The maximum number of parallel message batches to have in flight at any given time."),
 			policy.FieldSpec(),
@@ -150,6 +156,8 @@ type cassandraWriter struct {
 
 	argsMapping *mapping.Executor
 	batchType   gocql.BatchType
+
+	label string
 }
 
 func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (*cassandraWriter, error) {
@@ -157,6 +165,7 @@ func newCassandraWriter(conf output.CassandraConfig, mgr bundle.NewManagement) (
 		log:   mgr.Logger(),
 		stats: mgr.Metrics(),
 		conf:  conf,
+		label: mgr.Label(),
 	}
 
 	var err error
@@ -218,6 +227,7 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 	if conn.Consistency, err = gocql.ParseConsistencyWrapper(c.conf.Consistency); err != nil {
 		return fmt.Errorf("parsing consistency: %w", err)
 	}
+	conn.Keyspace = c.conf.Keyspace
 
 	conn.RetryPolicy = &decorator{
 		NumRetries: int(c.conf.Config.MaxRetries),
@@ -230,6 +240,31 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 			return fmt.Errorf("failed to parse timeout string: %v", err)
 		}
 	}
+	if ctout := c.conf.ConnectTimeout; len(ctout) > 0 {
+		var err error
+		if conn.ConnectTimeout, err = time.ParseDuration(ctout); err != nil {
+			return fmt.Errorf("failed to parse connection timeout string: %v", err)
+		}
+	}
+
+	conn.Logger = newDebugWrapper(c.log.With("cassandra_output", c.label))
+
+	if c.conf.UseTokenAwareHostPolicy {
+		fallback := gocql.RoundRobinHostPolicy()
+
+		if c.conf.ShuffleReplicas {
+			conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(fallback, gocql.ShuffleReplicas())
+		} else {
+			conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(fallback)
+		}
+	}
+
+	if c.conf.UseCompressor {
+		conn.Compressor = gocql.SnappyCompressor{}
+	}
+
+	conn.DefaultIdempotence = c.conf.DefaultIdempotence
+
 	session, err := conn.CreateSession()
 	if err != nil {
 		return fmt.Errorf("creating Cassandra session: %w", err)

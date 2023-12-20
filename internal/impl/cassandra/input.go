@@ -30,9 +30,40 @@ func cassandraConfigSpec() *service.ConfigSpec {
 			Optional()).
 		Field(service.NewInternalField(fieldBackoff())).
 		Field(service.NewStringField("timeout").
-			Description("").
+			Description("cassandra query timeout").
 			Default("600ms").
-			Example("600ms"))
+			Example("600ms")).
+		Field(service.NewStringField("connect_timeout").
+			Description("cassandra connect timeout.").
+			Default("600ms").
+			Example("600ms").
+			Advanced().
+			Version("4.XX.X")).
+		Field(service.NewBoolField("use_token_aware_host_policy").
+			Description("If enabled the driver will use a token aware host selection policy.").
+			Advanced().
+			Optional().
+			Version("4.XX.X")).
+		Field(service.NewBoolField("shuffle_replicas").
+			Description("If `use_token_aware_host_policy` is enabled the driver will shuffle replicas before pick one.").
+			Advanced().
+			Optional().
+			Version("4.XX.X")).
+		Field(service.NewBoolField("use_compressor").
+			Description("If true, will use snap compressor").
+			Advanced().
+			Optional().
+			Version("4.XX.X")).
+		Field(service.NewBoolField("default_idempotence").
+			Description("If true, enable the defaut idempotence. non-idempotence queries are not retried").
+			Advanced().
+			Optional().
+			Version("4.XX.X")).
+		Field(service.NewStringField("keyspace").
+			Description("initial keyspace.").
+			Advanced().
+			Optional().
+			Version("4.XX.X"))
 	spec = spec.
 		Example("Minimal Select (Cassandra/Scylla)",
 			`
@@ -80,14 +111,14 @@ func init() {
 	err := service.RegisterInput(
 		"cassandra", cassandraConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newCassandraInput(conf)
+			return newCassandraInput(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
+func newCassandraInput(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 	addrs, err := conf.FieldStringList("addresses")
 	if err != nil {
 		return nil, err
@@ -98,9 +129,49 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		return nil, err
 	}
 
-	var disable bool
+	var disableIHL bool
 	if conf.Contains("disable_initial_host_lookup") {
-		disable, err = conf.FieldBool("disable_initial_host_lookup")
+		disableIHL, err = conf.FieldBool("disable_initial_host_lookup")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var useTAHP bool
+	if conf.Contains("use_token_aware_host_policy") {
+		useTAHP, err = conf.FieldBool("use_token_aware_host_policy")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var shuffleReplicas bool
+	if conf.Contains("shuffle_replicas") {
+		shuffleReplicas, err = conf.FieldBool("shuffle_replicas")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var useCompressor bool
+	if conf.Contains("use_compressor") {
+		useCompressor, err = conf.FieldBool("use_compressor")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var defIdempotence bool
+	if conf.Contains("default_idempotence") {
+		useCompressor, err = conf.FieldBool("default_idempotence")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var keyspace string
+	if conf.Contains("keyspace") {
+		keyspace, err = conf.FieldString("keyspace")
 		if err != nil {
 			return nil, err
 		}
@@ -133,14 +204,31 @@ func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {
 		return nil, err
 	}
 
+	ctout, err := conf.FieldString("connect_timeout")
+	if err != nil {
+		return nil, err
+	}
+	connectTimeout, err := time.ParseDuration(ctout)
+	if err != nil {
+		return nil, err
+	}
+
 	return service.AutoRetryNacks(&cassandraInput{
-		addresses:  addrs,
-		auth:       pAuth,
-		disableIHL: disable,
-		query:      query,
-		maxRetries: retries,
-		backoff:    backoff,
-		timeout:    timeout,
+		addresses:       addrs,
+		auth:            pAuth,
+		disableIHL:      disableIHL,
+		useTAHP:         useTAHP,
+		shuffleReplicas: shuffleReplicas,
+		useCompressor:   useCompressor,
+		defIdempotence:  defIdempotence,
+		keyspace:        keyspace,
+		query:           query,
+		maxRetries:      retries,
+		backoff:         backoff,
+		timeout:         timeout,
+		connectTimeout:  connectTimeout,
+		log:             mgr.Logger(),
+		label:           mgr.Label(),
 	}), nil
 }
 
@@ -213,16 +301,25 @@ type backOff struct {
 }
 
 type cassandraInput struct {
-	addresses  []string
-	auth       passwordAuthenticator
-	disableIHL bool
-	query      string
-	maxRetries int
-	backoff    backOff
-	timeout    time.Duration
+	addresses       []string
+	auth            passwordAuthenticator
+	disableIHL      bool
+	useTAHP         bool
+	shuffleReplicas bool
+	useCompressor   bool
+	defIdempotence  bool
+	keyspace        string
+	query           string
+	maxRetries      int
+	backoff         backOff
+	timeout         time.Duration
+	connectTimeout  time.Duration
 
 	session *gocql.Session
 	iter    *gocql.Iter
+
+	log   *service.Logger
+	label string
 }
 
 func (c *cassandraInput) Connect(ctx context.Context) error {
@@ -248,6 +345,28 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 	}
 
 	conn.Timeout = c.timeout
+
+	conn.ConnectTimeout = c.connectTimeout
+
+	conn.Logger = newDebugWrapper(c.log.With("cassandra_input", c.label))
+
+	if c.useTAHP {
+		fallback := gocql.RoundRobinHostPolicy()
+
+		if c.shuffleReplicas {
+			conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(fallback, gocql.ShuffleReplicas())
+		} else {
+			conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(fallback)
+		}
+	}
+
+	if c.useCompressor {
+		conn.Compressor = gocql.SnappyCompressor{}
+	}
+
+	conn.DefaultIdempotence = c.defIdempotence
+
+	conn.Keyspace = c.keyspace
 
 	session, err := conn.CreateSession()
 	if err != nil {

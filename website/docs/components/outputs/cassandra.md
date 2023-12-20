@@ -74,6 +74,12 @@ output:
       initial_interval: 1s
       max_interval: 5s
     timeout: 600ms
+    connect_timeout: 600ms
+    use_token_aware_host_policy: false
+    shuffle_replicas: false
+    use_compressor: false
+    default_idempotence: false
+    keyspace: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -421,12 +427,66 @@ Default: `"5s"`
 
 ### `timeout`
 
-The client connection timeout.
+The client query timeout.
 
 
 Type: `string`  
 Default: `"600ms"`  
 Requires version 3.63.0 or newer  
+
+### `connect_timeout`
+
+The client connection timeout.
+
+
+Type: `string`  
+Default: `"600ms"`  
+Requires version 4.XX.X or newer  
+
+### `use_token_aware_host_policy`
+
+if true, enable token aware host policy
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `shuffle_replicas`
+
+combining with `use_token_aware_host_policy`, will force shuffle replicas when pick the next host
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `use_compressor`
+
+if true, will use a snap compressor
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `default_idempotence`
+
+set queries as default idempotent. non idempotent queries are not retried
+
+
+Type: `bool`  
+Default: `false`  
+Requires version 4.XX.X or newer  
+
+### `keyspace`
+
+Initial keyspace.
+
+
+Type: `string`  
+Default: `""`  
+Requires version 4.XX.X or newer  
 
 ### `max_in_flight`
 
