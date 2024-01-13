@@ -105,6 +105,7 @@ require (
 	github.com/twmb/franz-go v1.15.2
 	github.com/twmb/franz-go/pkg/kmsg v1.7.0
 	github.com/urfave/cli/v2 v2.25.7
+	github.com/vmihailenco/go-tinylfu v0.2.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/xdg/scram v1.0.5
 	github.com/xeipuuv/gojsonschema v1.2.0
