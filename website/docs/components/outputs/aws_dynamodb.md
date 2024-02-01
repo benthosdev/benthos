@@ -175,6 +175,16 @@ An optional TTL to set for items, calculated from the moment the message is sent
 Type: `string`  
 Default: `""`  
 
+```yml
+# Examples
+
+ttl: 60s
+
+ttl: 5m
+
+ttl: 36h
+```
+
 ### `ttl_key`
 
 The column key to place the TTL value within.
