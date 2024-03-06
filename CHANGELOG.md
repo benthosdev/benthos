@@ -65,6 +65,7 @@ All notable changes to this project will be documented in this file.
 - Field `idle_timeout` added to the `read_until` input.
 - Field `delay_seconds` added to the `aws_sqs` output.
 - Fields `discard_unknown` and `use_proto_names` added to the `protobuf` processors.
+- Field `proxy_url` added to the `websocket` input and output.
 
 ### Fixed
 
@@ -72,6 +73,8 @@ All notable changes to this project will be documented in this file.
 - All redis components now support usernames within the configured URL for authentication.
 - The `protobuf` processor now supports targetting nested types from proto files.
 - The `schema_registry_encode` and `schema_registry_decode` processors should no longer double escape URL unsafe characters within subjects when querying their latest versions.
+- The Benthos [install script](https://sh.benthos.dev) no longer makes redundant `sudo` calls.
+- The `websocket` input and output now obey the `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables.
 
 ## 4.23.0 - 2023-10-30
 

@@ -40,6 +40,9 @@ func websocketInputSpec() *service.ConfigSpec {
 			service.NewURLField("url").
 				Description("The URL to connect to.").
 				Example("ws://localhost:4195/get/ws"),
+			service.NewURLField("proxy_url").
+				Description("An optional HTTP proxy URL.").
+				Advanced().Optional(),
 			service.NewStringField("open_message").
 				Description("An optional message to send to the server upon connection.").
 				Advanced().Optional(),
@@ -87,12 +90,13 @@ type websocketReader struct {
 
 	lock *sync.Mutex
 
-	client     *websocket.Conn
-	urlParsed  *url.URL
-	urlStr     string
-	tlsEnabled bool
-	tlsConf    *tls.Config
-	reqSigner  httpclient.RequestSigner
+	client         *websocket.Conn
+	urlParsed      *url.URL
+	urlStr         string
+	proxyURLParsed *url.URL
+	tlsEnabled     bool
+	tlsConf        *tls.Config
+	reqSigner      httpclient.RequestSigner
 
 	openMsgType wsOpenMsgType
 	openMsg     []byte
@@ -110,6 +114,11 @@ func newWebsocketReaderFromParsed(conf *service.ParsedConfig, mgr bundle.NewMana
 	}
 	if ws.urlStr, err = conf.FieldString("url"); err != nil {
 		return nil, err
+	}
+	if conf.Contains("proxy_url") {
+		if ws.proxyURLParsed, err = conf.FieldURL("proxy_url"); err != nil {
+			return nil, err
+		}
 	}
 	if ws.tlsConf, ws.tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
 		return nil, err
@@ -154,14 +163,17 @@ func (w *websocketReader) Connect(ctx context.Context) error {
 	}
 
 	var client *websocket.Conn
+
+	dialer := *websocket.DefaultDialer
+	if w.proxyURLParsed != nil {
+		dialer.Proxy = http.ProxyURL(w.proxyURLParsed)
+	}
 	if w.tlsEnabled {
-		dialer := websocket.Dialer{
-			TLSClientConfig: w.tlsConf,
-		}
+		dialer.TLSClientConfig = w.tlsConf
 		if client, _, err = dialer.Dial(w.urlStr, headers); err != nil {
 			return err
 		}
-	} else if client, _, err = websocket.DefaultDialer.Dial(w.urlStr, headers); err != nil {
+	} else if client, _, err = dialer.Dial(w.urlStr, headers); err != nil {
 		return err
 	}
 
