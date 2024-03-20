@@ -19,10 +19,11 @@ import (
 )
 
 const (
-	metProcFieldType   = "type"
-	metProcFieldName   = "name"
-	metProcFieldLabels = "labels"
-	metProcFieldValue  = "value"
+	metProcFieldType         = "type"
+	metProcFieldName         = "name"
+	metProcFieldLabels       = "labels"
+	metProcFieldValue        = "value"
+	metProcFieldDeleteMetric = "delete_metric"
 )
 
 func metProcSpec() *service.ConfigSpec {
@@ -137,6 +138,10 @@ metrics:
 			service.NewInterpolatedStringField(metProcFieldValue).
 				Description("For some metric types specifies a value to set, increment. Certain metrics exporters such as Prometheus support floating point values, but those that do not will cast a floating point value into an integer.").
 				Default(""),
+			service.NewInterpolatedStringField(metProcFieldDeleteMetric).
+				Description("When set to true, the metric will be deleted. Currently this is only supported for Prometheus metrics.").
+				Optional().
+				Default("false"),
 		)
 }
 
@@ -166,8 +171,13 @@ func init() {
 				return nil, err
 			}
 
+			shouldDeleteMetric, err := conf.FieldString(metProcFieldDeleteMetric)
+			if err != nil {
+				return nil, err
+			}
+
 			mgr := interop.UnwrapManagement(res)
-			p, err := newMetricProcessor(procTypeStr, procName, valueStr, labelMap, mgr)
+			p, err := newMetricProcessor(procTypeStr, procName, valueStr, shouldDeleteMetric, labelMap, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -192,6 +202,8 @@ type metricProcessor struct {
 	mCounterVec metrics.StatCounterVec
 	mGaugeVec   metrics.StatGaugeVec
 	mTimerVec   metrics.StatTimerVec
+
+	shouldDeleteMetric *field.Expression
 
 	handler func(string, int, message.Batch) error
 }
@@ -228,15 +240,21 @@ func (l labels) values(index int, msg message.Batch) ([]string, error) {
 	return values, nil
 }
 
-func newMetricProcessor(typeStr, name, valueStr string, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
+func newMetricProcessor(typeStr, name, valueStr, shouldDeleteMetric string, labels map[string]string, mgr bundle.NewManagement) (processor.V1, error) {
 	value, err := mgr.BloblEnvironment().NewField(valueStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value expression: %v", err)
 	}
 
+	deleteMetric, err := mgr.BloblEnvironment().NewField(shouldDeleteMetric)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value expression: %v", err)
+	}
+
 	m := &metricProcessor{
-		log:   mgr.Logger(),
-		value: value,
+		log:                mgr.Logger(),
+		value:              value,
+		shouldDeleteMetric: deleteMetric,
 	}
 
 	if name == "" {
@@ -352,24 +370,43 @@ func (m *metricProcessor) handleCounterBy(val string, index int, msg message.Bat
 }
 
 func (m *metricProcessor) handleGauge(val string, index int, msg message.Batch) error {
+	shouldDeleteMetricStr, err := m.shouldDeleteMetric.String(index, msg)
+	if err != nil {
+		return err
+	}
+	shouldDeleteMetric, err := strconv.ParseBool(shouldDeleteMetricStr)
+	if err != nil {
+		return fmt.Errorf("could not convert %s into bool, current type: [%T], value: [%v]", metProcFieldDeleteMetric, shouldDeleteMetricStr, shouldDeleteMetricStr)
+	}
+
 	if len(m.labels) > 0 {
 		labelValues, err := m.labels.values(index, msg)
 		if err != nil {
 			return err
 		}
+		gaugeVec := m.mGaugeVec.With(labelValues...)
+		if shouldDeleteMetric {
+			gaugeVec.Delete()
+			return nil
+		}
 		return withNumberStr(val, func(i int64) error {
-			m.mGaugeVec.With(labelValues...).Set(i)
+			gaugeVec.Set(i)
 			return nil
 		}, func(f float64) error {
-			m.mGaugeVec.With(labelValues...).SetFloat64(f)
+			gaugeVec.SetFloat64(f)
 			return nil
 		})
 	}
+	gauge := m.mGauge
+	if shouldDeleteMetric {
+		gauge.Delete()
+		return nil
+	}
 	return withNumberStr(val, func(i int64) error {
-		m.mGauge.Set(i)
+		gauge.Set(i)
 		return nil
 	}, func(f float64) error {
-		m.mGauge.SetFloat64(f)
+		gauge.SetFloat64(f)
 		return nil
 	})
 }

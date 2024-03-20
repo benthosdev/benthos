@@ -178,6 +178,7 @@ type MetricsExporterGauge interface {
 	// order of labels specified when the gauge was created.
 	// TODO: V5 Add this (or replace the int based method)
 	// SetFloat64(value float64)
+	// Delete() bool
 }
 
 //------------------------------------------------------------------------------
@@ -232,6 +233,15 @@ func (a *airGapGauge) Set(value int64) {
 	a.airGapped.Set(value)
 }
 
+func (a *airGapGauge) Delete() bool {
+	if fer, ok := a.airGapped.(interface {
+		Delete() bool
+	}); ok {
+		return fer.Delete()
+	}
+	return true
+}
+
 type airGapCounter struct {
 	airGapped MetricsExporterCounter
 }
@@ -276,6 +286,7 @@ func (a *airGapTimingVec) With(labelValues ...string) metrics.StatTimer {
 
 type airGapGaugeVec struct {
 	ctor MetricsExporterGaugeCtor
+	name string
 }
 
 func (a *airGapGaugeVec) With(labelValues ...string) metrics.StatGauge {
@@ -303,7 +314,10 @@ func (m *airGapMetrics) GetGauge(path string) metrics.StatGauge {
 }
 
 func (m *airGapMetrics) GetGaugeVec(path string, labelNames ...string) metrics.StatGaugeVec {
-	return &airGapGaugeVec{m.airGapped.NewGaugeCtor(path, labelNames...)}
+	return &airGapGaugeVec{
+		ctor: m.airGapped.NewGaugeCtor(path, labelNames...),
+		name: path,
+	}
 }
 
 func (m *airGapMetrics) HandlerFunc() http.HandlerFunc {

@@ -131,7 +131,11 @@ func init() {
 //------------------------------------------------------------------------------
 
 type promGauge struct {
-	ctr prometheus.Gauge
+	ctr    prometheus.Gauge
+	reg    *prometheus.Registry
+	gauges map[string]*promGaugeVec
+	name   string
+	mu     sync.Mutex
 }
 
 func (p *promGauge) Incr(count int64) {
@@ -151,11 +155,40 @@ func (p *promGauge) DecrFloat64(count float64) {
 }
 
 func (p *promGauge) Set(value int64) {
+	p.tryReRegisterMetric()
 	p.ctr.Set(float64(value))
 }
 
 func (p *promGauge) SetFloat64(value float64) {
+	p.tryReRegisterMetric()
 	p.ctr.Set(value)
+}
+
+func (p *promGauge) tryReRegisterMetric() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	delKey := "__deleted__" + p.name + "__deleted__"
+	delGauge, ok := p.gauges[delKey]
+	if ok {
+		delete(p.gauges, delKey)
+		p.gauges[p.name] = delGauge
+		p.reg.MustRegister(delGauge.ctr)
+	}
+}
+
+func (p *promGauge) Delete() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	oldGauge, ok := p.gauges[p.name]
+	if !ok {
+		return false
+	}
+	p.gauges["__deleted__"+p.name+"__deleted__"] = oldGauge
+	delete(p.gauges, p.name)
+	p.reg.Unregister(p.ctr)
+	return true
 }
 
 type promCounter struct {
@@ -220,13 +253,19 @@ func (p *promTimingHistVec) With(labelValues ...string) metrics.StatTimer {
 }
 
 type promGaugeVec struct {
-	ctr   *prometheus.GaugeVec
-	count int
+	ctr    *prometheus.GaugeVec
+	reg    *prometheus.Registry
+	gauges map[string]*promGaugeVec
+	count  int
+	name   string
 }
 
 func (p *promGaugeVec) With(labelValues ...string) metrics.StatGauge {
 	return &promGauge{
-		ctr: p.ctr.WithLabelValues(labelValues...),
+		ctr:    p.ctr.WithLabelValues(labelValues...),
+		reg:    p.reg,
+		gauges: p.gauges,
+		name:   p.name,
 	}
 }
 
@@ -493,8 +532,11 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 		p.reg.MustRegister(ctr)
 
 		pv = &promGaugeVec{
-			ctr:   ctr,
-			count: len(labelNames),
+			ctr:    ctr,
+			reg:    p.reg,
+			gauges: p.gauges,
+			count:  len(labelNames),
+			name:   path,
 		}
 		p.gauges[path] = pv
 	}
