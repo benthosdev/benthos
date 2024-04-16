@@ -36,6 +36,7 @@ output:
   label: ""
   gcp_bigquery:
     project: ""
+    job_project: ""
     dataset: "" # No default (required)
     table: "" # No default (required)
     format: NEWLINE_DELIMITED_JSON
@@ -60,6 +61,7 @@ output:
   label: ""
   gcp_bigquery:
     project: ""
+    job_project: ""
     dataset: "" # No default (required)
     table: "" # No default (required)
     format: NEWLINE_DELIMITED_JSON
@@ -138,6 +140,14 @@ Batches can be formed at both the input and output level. You can find out more
 ### `project`
 
 The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.
+
+
+Type: `string`  
+Default: `""`  
+
+### `job_project`
+
+The project ID in which jobs will be exectuted. If not set, project will be used.
 
 
 Type: `string`  
