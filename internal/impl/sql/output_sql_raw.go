@@ -10,6 +10,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func sqlRawOutputConfig() *service.ConfigSpec {
@@ -95,6 +96,7 @@ type sqlRawOutput struct {
 	connSettings *connSettings
 
 	logger  *service.Logger
+	tracer  trace.TracerProvider
 	shutSig *shutdown.Signaller
 }
 
@@ -134,11 +136,12 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
+	return newSQLRawOutput(mgr.Logger(), mgr.OtelTracer(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
 }
 
 func newSQLRawOutput(
 	logger *service.Logger,
+	tracer trace.TracerProvider,
 	driverStr, dsnStr string,
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
@@ -147,6 +150,7 @@ func newSQLRawOutput(
 ) *sqlRawOutput {
 	return &sqlRawOutput{
 		logger:       logger,
+		tracer:       tracer,
 		shutSig:      shutdown.NewSignaller(),
 		driver:       driverStr,
 		dsn:          dsnStr,
@@ -166,7 +170,7 @@ func (s *sqlRawOutput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if s.db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+	if s.db, err = sqlOpenWithReworks(s.logger, s.tracer, s.driver, s.dsn); err != nil {
 		return err
 	}
 
