@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.30.0 - TBD
+
+### Fixed
+
+- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns. (@mihaitodor)
+
 ## 4.29.0 - 2024-06-04
 
 ### Added
@@ -52,7 +58,6 @@ All notable changes to this project will be documented in this file.
 - Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
 - The `parse_form_url_encoded` Bloblang method no longer produces results with an unknown data type for repeated query parameters.
 - The `echo` CLI command no longer fails to sanitise configs when encountering an empty `password` field.
-- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns.
 
 ### Changed
 
