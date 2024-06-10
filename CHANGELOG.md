@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ## 4.30.0 - TBD
 
+### Added
+
+- (Benthos) Field `omit_empty` added to the `lines` scanner. (@mihaitodor)
+- (Benthos) New scheme `gcm` added to the `encrypt_aes` and `decrypy_aes` Bloblang methods. (@abergmeier)
+- (Benthos) New Bloblang method `pow`. (@mfamador)
+
 ### Fixed
 
 - The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns. (@mihaitodor)
