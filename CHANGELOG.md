@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - The `splunk` input and `splunk_hec` output now support custom `tls` configuration. (@mihaitodor)
 - Field `timestamp` added to the `kafka` and `kafka_franz` outputs. (@mihaitodor)
 
+## 4.30.1 - 2024-06-13
+
+### Fixed
+
+- AWS Lambda serverless build artifacts have been added back to official releases.
+
 ## 4.30.0 - 2024-06-13
 
 ### Added
