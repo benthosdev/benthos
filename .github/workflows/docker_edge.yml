@@ -30,6 +30,20 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
+    - name: configure aws credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_SM_READONLY_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SM_READONLY_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: get secrets from aws sm
+      uses: aws-actions/aws-secretsmanager-get-secrets@v2
+      with:
+        secret-ids: |
+          ,sdlc/prod/github/dockerhub_token
+        parse-json-secrets: true
+
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
