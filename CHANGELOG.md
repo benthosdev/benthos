@@ -5,7 +5,6 @@ All notable changes to this project will be documented in this file.
 
 ## v4.31.0 - TBD
 
-
 ### Added
 
 - The `splunk` input and `splunk_hec` output now support custom `tls` configuration. (@mihaitodor)
